@@ -12,18 +12,40 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func YourHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Gorilla!\n"))
+func routeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.Error(w, "404 not found", http.StatusNotFound)
+		return
+	}
+	if r.Method != "GET" {
+		http.Error(w, "method is not supported", http.StatusNotFound)
+		return
+	}
+	http.ServeFile(w, r, "static/index.html")
+}
+
+func formHandler(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(2048); err != nil {
+		fmt.Fprintf(w, "ParseMultipartForm() err: %v", err)
+		return
+	}
+	fmt.Fprintf(w, "POST request successful")
+	//uncommentfile := r.FormValue("file")
+	//uncommenttext := r.FormValue("text")
+
 }
 
 func main() {
 	text := "this is a test"
 	testimage := Request{"img.png", "Garamond.ttf", text, 255, 0, 0}
 	TextOnImg(testimage)
-
 	r := mux.NewRouter()
+
 	// Routes consist of a path and a handler function.
-	r.HandleFunc("/", YourHandler)
+	r.HandleFunc("/", routeHandler).
+		Methods("GET")
+	r.HandleFunc("/submit", formHandler).
+		Methods("POST")
 
 	// Bind to a port and pass our router in
 	log.Fatal(http.ListenAndServe(":8000", r))

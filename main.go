@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"io"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/disintegration/imaging"
 	"github.com/fogleman/gg"
@@ -25,13 +27,28 @@ func routeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func formHandler(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(2048); err != nil {
+	file, handler, err := r.FormFile("file")
+	fileName := r.FormValue("file_name")
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	f, err := os.OpenFile(handler.Filename, os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	_, _ = io.WriteString(w, "File "+fileName+" Uploaded successfully")
+	_, _ = io.Copy(f, file)
+
+	if err := r.ParseMultipartForm(8192); err != nil {
 		fmt.Fprintf(w, "ParseMultipartForm() err: %v", err)
 		return
 	}
 	fmt.Fprintf(w, "POST request successful")
-	//uncommentfile := r.FormValue("file")
-	//uncommenttext := r.FormValue("text")
+
+	//text := r.FormValue("text")
 
 }
 

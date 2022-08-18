@@ -7,18 +7,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Enemy Felled</title>
   <link rel="stylesheet" href="/stylesheets/style.css" />
-  <script src="/js/script.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/uuid/8.1.0/uuidv4.min.js"></script>
 
 <body>
+  {{if .}}
     <center>
-      <img src="/enemyfelled.png" /></marquee>
+      <img src={{.}} style="width:95vw;height:95vh">
+      <p>{{.}}</p>
+    </center>
+    
+
+
+  {{else}}
+    <center>
+      <img src="/files/enemyfelled.png" style="width: 50vw;">
       
-      <form id=upload action="/submit" enctype="multipart/form-data">
+      <form action="/" method="post" enctype="multipart/form-data">
           <h2>a dumb lil elden ring generator i made (ALPHA)</h2>
           <input type="file" name="file" required></br></br>
           <h3>Enter your text</h3>
           <input type="text" name="text" id="text" required>
+          <h3>COLORS OH MY GHAD!</h3>
+          <p>Red value(0-255)</p>
+          <input type="number" name="red" min="0" max="255" value="0">
+          <p>Green value(0-255)</p>
+          <input type="number" name="green" min="0" max="255" value="0">
+          <p>Blue value(0-255)</p>
+          <input type="number" name="blue" min="0" max="255" value="0">
           <button type=submit class="btn btn-primary">Upload</button>
       </form>
     </center>
@@ -26,12 +40,12 @@
         <h4>More options coming soon same with some styling to make it not look like another of my projects</h4>
     </center>
     <div class="mention">
-    <center>
-      <p>Big thanks to</p>
-      <a href="https://TAWAN475.dev/eldenring">tawan475.dev</a></marquee>
-      <p>btw web design is my passion</p>
-    </center>
   </div>
+
+  {{end}}
+  <center>
+    <p>made in go because i thought javascript was talkin to the feds</p>
+  </center>
 </body>
 
 </html>

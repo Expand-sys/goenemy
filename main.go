@@ -2,77 +2,94 @@ package main
 
 import (
 	"fmt"
-	"image"
+	"html/template"
 	"image/color"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strconv"
 
 	"github.com/disintegration/imaging"
 	"github.com/fogleman/gg"
-	"github.com/gorilla/mux"
+	"github.com/google/uuid"
 )
 
-func routeHandler(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		http.Error(w, "404 not found", http.StatusNotFound)
-		return
-	}
-	if r.Method != "GET" {
-		http.Error(w, "method is not supported", http.StatusNotFound)
-		return
-	}
-	http.ServeFile(w, r, "static/index.html")
-}
-
-func formHandler(w http.ResponseWriter, r *http.Request) {
-	file, handler, err := r.FormFile("file")
-	fileName := r.FormValue("file_name")
+func FileSave(r *http.Request) string {
+	// left shift 32 << 20 which results in 32*2^20 = 33554432
+	// x << y, results in x*2^y
+	err := r.ParseMultipartForm(32 << 20)
 	if err != nil {
-		panic(err)
+		fmt.Println("error parsing")
+		return ""
 	}
-	defer file.Close()
-
-	f, err := os.OpenFile(handler.Filename, os.O_WRONLY|os.O_CREATE, 0666)
+	uuid := uuid.NewString()
+	fmt.Println(uuid)
+	// Retrieve the file from form data
+	f, h, err := r.FormFile("file")
 	if err != nil {
-		panic(err)
+		fmt.Println("error retrieving file")
+
+		return ""
 	}
 	defer f.Close()
-	_, _ = io.WriteString(w, "File "+fileName+" Uploaded successfully")
-	_, _ = io.Copy(f, file)
+	path := filepath.Join(".", "files")
+	_ = os.MkdirAll(path, os.ModePerm)
+	fullPath := path + "/" + uuid + filepath.Ext(h.Filename)
+	file, err := os.OpenFile(fullPath, os.O_WRONLY|os.O_CREATE, os.ModePerm)
+	if err != nil {
+		fmt.Println("error ", err)
 
-	if err := r.ParseMultipartForm(8192); err != nil {
-		fmt.Fprintf(w, "ParseMultipartForm() err: %v", err)
-		return
+		return ""
+
 	}
-	fmt.Fprintf(w, "POST request successful")
-
-	//text := r.FormValue("text")
-
+	defer file.Close()
+	// Copy the file to the destination path
+	_, err = io.Copy(file, f)
+	if err != nil {
+		return ""
+	}
+	return fullPath
 }
 
 func main() {
-	text := "this is a test"
-	testimage := Request{"img.png", "Garamond.ttf", text, 255, 0, 0}
-	TextOnImg(testimage)
-	r := mux.NewRouter()
+
+	fs := http.FileServer(http.Dir("files/"))
+	http.Handle("/files/", http.StripPrefix("/files/", fs))
+
+	tmpl, err := template.ParseFiles("static/index.html")
+	fmt.Println(err)
 
 	// Routes consist of a path and a handler function.
-	r.HandleFunc("/", routeHandler).
-		Methods("GET")
-	r.HandleFunc("/submit", formHandler).
-		Methods("POST")
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			tmpl.Execute(w, nil)
+			return
+		}
+		filePath := FileSave(r)
+		fmt.Println(r.FormValue("red"))
+		red, err := strconv.Atoi(r.FormValue("red"))
+		green, err := strconv.Atoi(r.FormValue("green"))
+		blue, err := strconv.Atoi(r.FormValue("blue"))
+		subject := Requestpic{filePath, r.FormValue("text"), uint8(red), uint8(green), uint8(blue)}
+		Imgreturned, err := TextOnImg(subject)
+		if err != nil {
+			fmt.Println("error")
+			tmpl.Execute(w, err)
+		}
+		fmt.Println(Imgreturned)
+		tmpl.Execute(w, Imgreturned)
+	})
 
 	// Bind to a port and pass our router in
-	log.Fatal(http.ListenAndServe(":8000", r))
+	log.Fatal(http.ListenAndServe(":8000", nil))
 
 }
 
-type Request struct {
+type Requestpic struct {
 	BgImgPath  string
-	FontPath   string
-	Text       string
+	Textinput  string
 	TextColorR uint8
 	TextColorG uint8
 	TextColorB uint8
@@ -84,7 +101,7 @@ func pxTopt(pt float64) (px float64) {
 	return second
 }
 
-func TextOnImg(request Request) (image.Image, error) {
+func TextOnImg(request Requestpic) (string, error) {
 	bgImage, err := gg.LoadImage(request.BgImgPath)
 	if err != nil {
 		fmt.Println(err)
@@ -99,14 +116,14 @@ func TextOnImg(request Request) (image.Image, error) {
 
 	fontsize := pxTopt(float64(imgHeight) / 10.0)
 
-	if err := dc.LoadFontFace(request.FontPath, fontsize); err != nil {
+	if err := dc.LoadFontFace("Garamond.ttf", fontsize); err != nil {
 		fmt.Println(err)
 	}
 	x := float64(imgWidth / 2)
 	y := float64((imgHeight / 2) - int(fontsize)/2)
 
 	ac := gg.NewContext(imgHeight, imgWidth)
-	ac.DrawRectangle(0, 0, float64(imgHeight), float64(imgWidth))
+	ac.DrawRectangle(0, 0, float64(imgHeight), float64(imgWidth)*1.2)
 	grad := gg.NewLinearGradient(fontsize, 0, float64(imgHeight), 0)
 	grad.AddColorStop(0, color.RGBA{0, 0, 0, 0})
 	grad.AddColorStop(0.25, color.RGBA{0, 0, 0, 50})
@@ -127,14 +144,14 @@ func TextOnImg(request Request) (image.Image, error) {
 
 	maxWidth := float64(imgWidth) - 60.0
 	dc.SetColor(color.RGBA{request.TextColorR, request.TextColorG, request.TextColorB, 255})
-	dc.DrawStringWrapped(request.Text, x, y, 0.5, 0.5, maxWidth, 1.5, gg.AlignCenter)
+	dc.DrawStringWrapped(request.Textinput, x, y*0.95, 0.5, 0.5, maxWidth, 1.5, gg.AlignCenter)
 
-	if err := dc.LoadFontFace(request.FontPath, fontsize*1.05); err != nil {
+	if err := dc.LoadFontFace("Garamond.ttf", fontsize*1.05); err != nil {
 		fmt.Println(err)
 	}
 	dc.SetColor(color.RGBA{request.TextColorR, request.TextColorG, request.TextColorB, 150})
-	dc.DrawStringWrapped(request.Text, x, y, 0.5, 0.5, maxWidth, 1.5, gg.AlignCenter)
+	dc.DrawStringWrapped(request.Textinput, x, y*0.95, 0.5, 0.5, maxWidth, 1.5, gg.AlignCenter)
 
-	dc.SavePNG("./out.png")
-	return dc.Image(), nil
+	dc.SavePNG(request.BgImgPath)
+	return request.BgImgPath, nil
 }
